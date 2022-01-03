@@ -1,8 +1,8 @@
 /**
   ******************************************************************************
-  * @file    stm32l4xx_hal_flash_ramfunc.h
+  * @file    stm32l4xx_hal_spi_ex.h
   * @author  MCD Application Team
-  * @brief   Header file of FLASH RAMFUNC driver.
+  * @brief   Header file of SPI HAL Extended module.
   ******************************************************************************
   * @attention
   *
@@ -12,17 +12,17 @@
   * This software component is licensed by ST under BSD 3-Clause license,
   * the "License"; You may not use this file except in compliance with the
   * License. You may obtain a copy of the License at:
-  *                       opensource.org/licenses/BSD-3-Clause
+  *                        opensource.org/licenses/BSD-3-Clause
   *
   ******************************************************************************
   */
 
 /* Define to prevent recursive inclusion -------------------------------------*/
-#ifndef STM32L4xx_FLASH_RAMFUNC_H
-#define STM32L4xx_FLASH_RAMFUNC_H
+#ifndef STM32L4xx_HAL_SPI_EX_H
+#define STM32L4xx_HAL_SPI_EX_H
 
 #ifdef __cplusplus
- extern "C" {
+extern "C" {
 #endif
 
 /* Includes ------------------------------------------------------------------*/
@@ -32,26 +32,24 @@
   * @{
   */
 
-/** @addtogroup FLASH_RAMFUNC
+/** @addtogroup SPIEx
   * @{
   */
 
 /* Exported types ------------------------------------------------------------*/
-/* Exported macro ------------------------------------------------------------*/
+/* Exported constants --------------------------------------------------------*/
+/* Exported macros -----------------------------------------------------------*/
 /* Exported functions --------------------------------------------------------*/
-/** @addtogroup FLASH_RAMFUNC_Exported_Functions
+/** @addtogroup SPIEx_Exported_Functions
   * @{
   */
 
-/** @addtogroup FLASH_RAMFUNC_Exported_Functions_Group1
+/* Initialization and de-initialization functions  ****************************/
+/* IO operation functions *****************************************************/
+/** @addtogroup SPIEx_Exported_Functions_Group1
   * @{
   */
-/* Peripheral Control functions  ************************************************/
-__RAM_FUNC  HAL_StatusTypeDef HAL_FLASHEx_EnableRunPowerDown(void);
-__RAM_FUNC  HAL_StatusTypeDef HAL_FLASHEx_DisableRunPowerDown(void);
-#if defined (STM32L4P5xx) || defined (STM32L4Q5xx) || defined (STM32L4R5xx) || defined (STM32L4R7xx) || defined (STM32L4R9xx) || defined (STM32L4S5xx) || defined (STM32L4S7xx) || defined (STM32L4S9xx)
-__RAM_FUNC  HAL_StatusTypeDef HAL_FLASHEx_OB_DBankConfig(uint32_t DBankConfig);
-#endif
+HAL_StatusTypeDef HAL_SPIEx_FlushRxFifo(SPI_HandleTypeDef *hspi);
 /**
   * @}
   */
@@ -72,6 +70,6 @@ __RAM_FUNC  HAL_StatusTypeDef HAL_FLASHEx_OB_DBankConfig(uint32_t DBankConfig);
 }
 #endif
 
-#endif /* STM32L4xx_FLASH_RAMFUNC_H */
+#endif /* STM32L4xx_HAL_SPI_EX_H */
 
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/

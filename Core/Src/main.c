@@ -1,21 +1,21 @@
 /* USER CODE BEGIN Header */
 /**
- * 7мар21
+ * 9апр21
  * Biriuk
  * NUCLEO-L452RE-P
  *
- * Nucleo_ADA-2021
+ * ADA-2021
  *
- * STM32CubeIDE Начинаем работать некоторые нюансы использоваиия среды разработки
+ * STM32CubeIDE Начинаем работать некоторые нюансы использования среды разработки
  * https://www.youtube.com/watch?v=u8zvOeuOdW4&list=RDCMUC2vcuP7iWaX0MVG6hJ-cOkg&start_radio=1#t=0&pbj=1
  *
  * ADC HAL stm32
  * https://istarik.ru/blog/stm32/113.html
  *
- * STM32. АЦП на практике. DMA, прерывания. Переходи с Arduino на STM32
+ * STM32. АЦП на практике. DMA, прерывания. Переходим с Arduino на STM32
  * https://www.youtube.com/watch?v=4DPMhs-hNMU
  *
- * STM32Cube ADC+PWM регулировка яркости светодиодов используя Ш�?М,АЦП и stm32f4 discovery
+ * STM32Cube ADC+PWM Регулировка яркости светодиодов используя ШИМ,АЦП и stm32f4 discovery
  * https://www.youtube.com/watch?v=RiZO9HGM-OY
  *
  * STM32Cube ADC настройка АЦП для регулярного канала STM32F407 discovery
@@ -24,11 +24,11 @@
  *STM32CubeIDE. Принципы работы и настройка интерфейса SWO
  *https://www.youtube.com/watch?v=nE-YrKpWjso&list=PL9lkEHy8EJU8a_bqiJXwGTo-uM_cPa98P
  *
-    � Программирование МК STM32. УРОК 18. HAL. ADC. Regular Channel. DMA
+ *Программирование МК STM32. УРОК 18. HAL. ADC. Regular Channel. DMA
  *https://www.youtube.com/watch?v=0fpdNWFnggQ&t=279s
  *https://narodstream.ru/stm-urok-18-hal-adc-regular-channel-dma/
  *
- * Урок 4:  STM Studio
+ * Урок 4: STM Studio
  * https://www.rvrobotics.ru/stm32_lesson_4
  *
  * STM32CubeIDE. Установка, настройка и отладка
@@ -74,7 +74,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-//�?змерение напряжения питания микроконтроллера STM32
+//Измерение напряжения питания микроконтроллера STM32
 //https://microtechnics.ru/izmerenie-napryazheniya-pitaniya-mikrokontrollera-stm32/
 #define ADC_REFERENCE_VOLTAGE	1.212	//internal reference voltage - datascheet, s.101
 #define ADC_MAX		0xFFF		//Максимальное напряжение питания АЦП в кодах = 4095
@@ -95,7 +95,7 @@
 /* to have a rank in each array address.                                    */
 #define ADC_CONVERTED_DATA_BUFFER_SIZE   (   4U)
 
-#define MSB_      4096	//��� RANGE_12BITS 2^12
+#define MSB_      4096	//для RANGE_12BITS 2^12
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -109,6 +109,9 @@ DMA_HandleTypeDef hdma_adc1;
 
 DAC_HandleTypeDef hdac1;
 
+SPI_HandleTypeDef hspi1;
+
+TIM_HandleTypeDef htim3;
 TIM_HandleTypeDef htim6;
 
 UART_HandleTypeDef huart2;
@@ -124,6 +127,10 @@ char trans_str[64] = {0,};
 //volatile uint16_t adc[4] = {0,};
 
 volatile uint16_t adc[ADC_CONVERTED_DATA_BUFFER_SIZE] = {0,};
+
+//uint16_t REC_SPI = 0;	//Сигнал, полученный по SPI
+//char REC_SPI[3] = {0,};	//Сигнал, полученный по SPI
+uint16_t REC_SPI[1] = {0};
 
 volatile uint8_t flag = 0;
 int LED_State = 0;
@@ -143,12 +150,15 @@ float Vbat_V = 0;			//Приведенное значение напряжени
 //float V_RFINT = 1.212;	//internal reference voltage - datascheet, s.101
 //int mcuVoltage_mV = 0;		//Значение напряжения питания в мВ
 float mcuVoltage_V = 0;		//Приведенное значение напряжения питания в В
-//uint16_t Vrefint_mV = 0;	//�?змеряемое напряжение Vrefint (Vrefint Channel) в мВ
-float Vref_V = 0;		//�?змеряемое напряжение Vrefint (Vrefint Channel) в В
+//uint16_t Vrefint_mV = 0;	//Измеряемое напряжение Vrefint (Vrefint Channel) в мВ
+float Vref_V = 0;		//Измеряемое напряжение Vrefint (Vrefint Channel) в В
 
 
 volatile uint8_t REPER = 0;
 volatile int REPER2 = 0;
+//uint8_t SPI_TMP = 0b010101;
+uint8_t SPI_TMP = 0x0b;
+//int SPI_TMP = 10;
 
 //volatile uint16_t ADC_Data[4];
 
@@ -186,6 +196,8 @@ static void MX_USART2_UART_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_DAC1_Init(void);
 static void MX_TIM6_Init(void);
+static void MX_TIM3_Init(void);
+static void MX_SPI1_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -214,7 +226,7 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 			//HAL_ADC_Start_DMA(&hadc1, (uint32_t*) adc, 1);
 
 			//printf("АЦП = %d\n", adc[j]);
-			//puts("АЦП работает правильно!!");
+			//puts("АЦП работает правильно!");
 
 			//printf("ADC = %d\n", adc[j]);
 			//puts("ADC arbeit richtig");
@@ -263,6 +275,8 @@ int main(void)
   MX_ADC1_Init();
   MX_DAC1_Init();
   MX_TIM6_Init();
+  MX_TIM3_Init();
+  MX_SPI1_Init();
   /* USER CODE BEGIN 2 */
 	//HAL_ADC_Init(&hadc1);		//????
 	//Калибровка АЦП
@@ -282,6 +296,11 @@ int main(void)
 	HAL_TIM_Base_Start(&htim6);
 
 	HAL_DAC_Start(&hdac1,DAC_CHANNEL_1);
+
+	HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
+
+	HAL_GPIO_WritePin(SS_SPI1_GPIO_Port, SS_SPI1_Pin, GPIO_PIN_SET);
+	HAL_Delay(100);
 
   /* USER CODE END 2 */
 
@@ -323,7 +342,7 @@ int main(void)
 			//HAL_ADC_Start_DMA(&hadc1, (uint32_t*) adc, j);
 			//HAL_ADC_Start_DMA(&hadc1, (uint32_t*) adc, 1);
 
-			//printf("��� = %d.\n", adc[j]);
+			//printf("АЦП = %d.\n", adc[j]);
 			//puts("АЦП работает правильно!");
 
 			//printf("ADC = %d\n", adc[j]);
@@ -339,7 +358,7 @@ int main(void)
 			//Vbat = adc[2];
 			//mcuVoltage = ADC_MAX * ADC_REFERENCE_VOLTAGE / adc[3];
 
-			//HAL_Delay(5000);	//�?ли здесь. Величина влияет на "просечки", см. график на STM32CubeMonitor. Спасает от сваливания в void HardFault_Handler(void)!!!
+			//HAL_Delay(5000);	//Или здесь. Величина влияет на "просечки", см. график на STM32CubeMonitor. Спасает от сваливания в void HardFault_Handler(void)!!!
 
 			Temp_Sens = __LL_ADC_CALC_TEMPERATURE(VDDA_APPLI, adc[1],
 					LL_ADC_RESOLUTION_12B);
@@ -353,8 +372,8 @@ int main(void)
 			//printf("TS_CAL1 = %hu\n", (int32_t)*((uint16_t*) (0x1FFF75A8UL)));
 			//puts("TS_CAL2");
 			//printf("TS_CAL2 = %hu\n", (int32_t)*((uint16_t*) (0x1FFF75CAUL)));
-			//ПРОВЕР�?Л на калькуляторе
-			//(130-30)/(1386-1045)*(940*3300/3000-1045)+30 = 26,77 ����.� �����!
+			//ПРОВЕРИЛ на калькулятореГ
+			//(130-30)/(1386-1045)*(940*3300/3000-1045)+30 = 26,77 град.С ВЕРНО!
 
 			//Vrefint_mV   = __LL_ADC_CALC_DATA_TO_VOLTAGE(VDDA_APPLI, adc[3], LL_ADC_RESOLUTION_12B);
 			//Vref_V = (float) Vrefint_mV / 1000;
@@ -455,6 +474,56 @@ int main(void)
 
 		HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, adc[0]);
 
+		TIM3->CCR1=adc[0]*16;
+		//[STM32Cube ADC+PWM Регулировка яркости светодиодов используя ШИМ,АЦП и stm32f4 discovery]
+		//https://www.youtube.com/watch?v=RiZO9HGM-OY&t=3s
+
+		//HAL_SPI_Transmit (&hspi1, (uint8_t *) &adc[0], 1, 5000);
+
+
+		HAL_GPIO_WritePin(SS_SPI1_GPIO_Port, SS_SPI1_Pin, GPIO_PIN_RESET);
+
+		//HAL_SPI_TransmitReceive(&hspi1, (uint8_t *) &adc[0], (uint8_t *) &REC_SPI, 1, 5000);
+		HAL_SPI_TransmitReceive(&hspi1, (uint8_t*) &SPI_TMP, (uint8_t*) &REC_SPI, sizeof(SPI_TMP), HAL_MAX_DELAY);
+
+
+		//Вообще форма TransmitReceive() может приводить к проблеме в случае больших задержек ответа
+		//от SLAVE, в таком случае удобнее применять раздельные команды Transmit и Receive
+		//(см. Записки программиста, Микроконтроллеры STM32: работа с SPI на примере флеш-памяти AT45DB161E
+		//https://eax.me/stm32-spi-flash/):
+		//STM32F407 Урок 06. Работаем с внешней памятью FLASH и PSRAM по шине SPI:
+		//https://imax9.narod.ru/publs/F407les06.html
+		//STM32 SPI Receive DMA получает данные об мусоре:
+		//https://fooobar.com/questions/15371833/stm32-spi-receive-dma-is-getting-garbage-data
+		//STM32 SPI, не могу заставить его работать:
+		//https://askentire.net/q/stm-32-spi-ne-mogu-zastavit-ego-rabotat-62164695329
+		//STM32 HAL библиотека SPI отладка связи LD3320:
+		//https://russianblogs.com/article/6569720047/
+
+		/*
+		HAL_SPI_Transmit(&hspi1, (uint8_t*) &SPI_TMP, 1, HAL_MAX_DELAY);
+		while (HAL_SPI_GetState(&hspi1) != HAL_SPI_STATE_READY);
+
+		HAL_SPI_Receive(&hspi1, (uint8_t*) &REC_SPI, 1, HAL_MAX_DELAY);
+		//while(HAL_SPI_GetState(&hspi1) != HAL_SPI_STATE_READY);	//возможно, не надо!
+		*/
+
+		//НО! При этом получается повтор передачи данных на шине SPI из-за двойного обращения:
+		//Transmit и Receive, что хорошо видно на анализаторе. Это приводит к уменьшению скорости обмена.
+
+		HAL_GPIO_WritePin(SS_SPI1_GPIO_Port, SS_SPI1_Pin, GPIO_PIN_SET);
+		//HAL_Delay(100);
+
+		puts("REC_SPI");
+		printf("REC_SPI = %d\n", REC_SPI[0]);
+
+		puts("SPI_TMP");
+		printf("SPI_TMP = %d\n", SPI_TMP);
+
+		//printf("REC_SPI = %3s\n", REC_SPI);
+		//puts("adc[0]");
+		//printf("adc[0] = %d\n", adc[0]);
+
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -470,13 +539,8 @@ void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+  RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
 
-  /** Configure the main internal regulator output voltage
-  */
-  if (HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1) != HAL_OK)
-  {
-    Error_Handler();
-  }
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
@@ -504,6 +568,26 @@ void SystemClock_Config(void)
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
   if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_4) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USART2|RCC_PERIPHCLK_ADC;
+  PeriphClkInit.Usart2ClockSelection = RCC_USART2CLKSOURCE_PCLK1;
+  PeriphClkInit.AdcClockSelection = RCC_ADCCLKSOURCE_PLLSAI1;
+  PeriphClkInit.PLLSAI1.PLLSAI1Source = RCC_PLLSOURCE_HSI;
+  PeriphClkInit.PLLSAI1.PLLSAI1M = 1;
+  PeriphClkInit.PLLSAI1.PLLSAI1N = 8;
+  PeriphClkInit.PLLSAI1.PLLSAI1P = RCC_PLLP_DIV7;
+  PeriphClkInit.PLLSAI1.PLLSAI1Q = RCC_PLLQ_DIV2;
+  PeriphClkInit.PLLSAI1.PLLSAI1R = RCC_PLLR_DIV2;
+  PeriphClkInit.PLLSAI1.PLLSAI1ClockOut = RCC_PLLSAI1_ADC1CLK;
+  if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /** Configure the main internal regulator output voltage
+  */
+  if (HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1) != HAL_OK)
   {
     Error_Handler();
   }
@@ -632,6 +716,105 @@ static void MX_DAC1_Init(void)
 }
 
 /**
+  * @brief SPI1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_SPI1_Init(void)
+{
+
+  /* USER CODE BEGIN SPI1_Init 0 */
+
+  /* USER CODE END SPI1_Init 0 */
+
+  /* USER CODE BEGIN SPI1_Init 1 */
+
+  /* USER CODE END SPI1_Init 1 */
+  /* SPI1 parameter configuration*/
+  hspi1.Instance = SPI1;
+  hspi1.Init.Mode = SPI_MODE_MASTER;
+  hspi1.Init.Direction = SPI_DIRECTION_2LINES;
+  hspi1.Init.DataSize = SPI_DATASIZE_8BIT;
+  hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
+  hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
+  hspi1.Init.NSS = SPI_NSS_SOFT;
+  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_256;
+  hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
+  hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
+  hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
+  hspi1.Init.CRCPolynomial = 7;
+  hspi1.Init.CRCLength = SPI_CRC_LENGTH_DATASIZE;
+  hspi1.Init.NSSPMode = SPI_NSS_PULSE_ENABLE;
+  if (HAL_SPI_Init(&hspi1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN SPI1_Init 2 */
+
+  /* USER CODE END SPI1_Init 2 */
+
+}
+
+/**
+  * @brief TIM3 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM3_Init(void)
+{
+
+  /* USER CODE BEGIN TIM3_Init 0 */
+
+  /* USER CODE END TIM3_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+  TIM_OC_InitTypeDef sConfigOC = {0};
+
+  /* USER CODE BEGIN TIM3_Init 1 */
+
+  /* USER CODE END TIM3_Init 1 */
+  htim3.Instance = TIM3;
+  htim3.Init.Prescaler = 0;
+  htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim3.Init.Period = 65535;
+  htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim3, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_PWM_Init(&htim3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim3, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sConfigOC.OCMode = TIM_OCMODE_PWM1;
+  sConfigOC.Pulse = 0;
+  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+  if (HAL_TIM_PWM_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM3_Init 2 */
+
+  /* USER CODE END TIM3_Init 2 */
+  HAL_TIM_MspPostInit(&htim3);
+
+}
+
+/**
   * @brief TIM6 Initialization Function
   * @param None
   * @retval None
@@ -736,7 +919,10 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, LD4_Pin|PWM_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(LD4_GPIO_Port, LD4_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(SS_SPI1_GPIO_Port, SS_SPI1_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : B1_Pin */
   GPIO_InitStruct.Pin = B1_Pin;
@@ -744,12 +930,19 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : LD4_Pin PWM_Pin */
-  GPIO_InitStruct.Pin = LD4_Pin|PWM_Pin;
+  /*Configure GPIO pin : LD4_Pin */
+  GPIO_InitStruct.Pin = LD4_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+  HAL_GPIO_Init(LD4_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : SS_SPI1_Pin */
+  GPIO_InitStruct.Pin = SS_SPI1_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_MEDIUM;
+  HAL_GPIO_Init(SS_SPI1_GPIO_Port, &GPIO_InitStruct);
 
 }
 
@@ -810,3 +1003,4 @@ void assert_failed(uint8_t *file, uint32_t line)
 }
 #endif /* USE_FULL_ASSERT */
 
+/************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/
