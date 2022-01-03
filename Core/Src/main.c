@@ -1,6 +1,6 @@
 /* USER CODE BEGIN Header */
 /**
- * 9апр21
+ * 31мая21
  * Biriuk
  * NUCLEO-L452RE-P
  *
@@ -15,7 +15,7 @@
  * STM32. АЦП на практике. DMA, прерывания. Переходим с Arduino на STM32
  * https://www.youtube.com/watch?v=4DPMhs-hNMU
  *
- * STM32Cube ADC+PWM Регулировка яркости светодиодов используя ШИМ,АЦП и stm32f4 discovery
+ * STM32Cube ADC+PWM Регулировка яркости светодиодов используя Ш�?М,АЦП и stm32f4 discovery
  * https://www.youtube.com/watch?v=RiZO9HGM-OY
  *
  * STM32Cube ADC настройка АЦП для регулярного канала STM32F407 discovery
@@ -74,7 +74,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-//Измерение напряжения питания микроконтроллера STM32
+//�?змерение напряжения питания микроконтроллера STM32
 //https://microtechnics.ru/izmerenie-napryazheniya-pitaniya-mikrokontrollera-stm32/
 #define ADC_REFERENCE_VOLTAGE	1.212	//internal reference voltage - datascheet, s.101
 #define ADC_MAX		0xFFF		//Максимальное напряжение питания АЦП в кодах = 4095
@@ -106,6 +106,8 @@
 /* Private variables ---------------------------------------------------------*/
 ADC_HandleTypeDef hadc1;
 DMA_HandleTypeDef hdma_adc1;
+
+CAN_HandleTypeDef hcan1;
 
 DAC_HandleTypeDef hdac1;
 
@@ -150,14 +152,14 @@ float Vbat_V = 0;			//Приведенное значение напряжени
 //float V_RFINT = 1.212;	//internal reference voltage - datascheet, s.101
 //int mcuVoltage_mV = 0;		//Значение напряжения питания в мВ
 float mcuVoltage_V = 0;		//Приведенное значение напряжения питания в В
-//uint16_t Vrefint_mV = 0;	//Измеряемое напряжение Vrefint (Vrefint Channel) в мВ
-float Vref_V = 0;		//Измеряемое напряжение Vrefint (Vrefint Channel) в В
+//uint16_t Vrefint_mV = 0;	//�?змеряемое напряжение Vrefint (Vrefint Channel) в мВ
+float Vref_V = 0;		//�?змеряемое напряжение Vrefint (Vrefint Channel) в В
 
 
 volatile uint8_t REPER = 0;
 volatile int REPER2 = 0;
 //uint8_t SPI_TMP = 0b010101;
-uint8_t SPI_TMP = 0x0b;
+uint8_t SPI_TMP = 0x0b;	//= 11dec
 //int SPI_TMP = 10;
 
 //volatile uint16_t ADC_Data[4];
@@ -186,6 +188,13 @@ uint8_t SPI_TMP = 0x0b;
 /* Variable to report ADC sequencer status */
 //uint8_t       ubSequenceCompleted = RESET;     /* Set when all ranks of the sequence have been converted */
 
+//https://istarik.ru/blog/stm32/159.html
+CAN_TxHeaderTypeDef TxHeader;
+CAN_RxHeaderTypeDef RxHeader;
+uint8_t TxData[8] = {0,};
+uint8_t RxData[8] = {0,};
+uint32_t TxMailbox = 0;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -198,6 +207,7 @@ static void MX_DAC1_Init(void);
 static void MX_TIM6_Init(void);
 static void MX_TIM3_Init(void);
 static void MX_SPI1_Init(void);
+static void MX_CAN1_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -240,6 +250,36 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 		//REPER2 = REPER2 * 2;
 	}
 }
+
+//https://istarik.ru/blog/stm32/159.html
+void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
+{
+	if (HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &RxHeader, RxData) == HAL_OK)
+	{
+		//HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+		//HAL_GPIO_TogglePin(LD4_GPIO_Port, LD4_Pin);
+		//LED_State = HAL_GPIO_ReadPin(LD4_GPIO_Port, LD4_Pin);
+		if (RxHeader.StdId == 0x0378)
+		{
+			snprintf(trans_str, 128, "ID %04lX %d\n", RxHeader.StdId,RxData[0]);
+			HAL_UART_Transmit(&huart2, (uint8_t*) trans_str, strlen(trans_str),100);
+		}
+		else if (RxHeader.StdId == 0x0126)
+		{
+			snprintf(trans_str, 128, "ID %04lX %d\n", RxHeader.StdId,RxData[0]);
+			HAL_UART_Transmit(&huart2, (uint8_t*) trans_str, strlen(trans_str),100);
+		}
+
+	}
+}
+//Колбек для ошибок:
+void HAL_CAN_ErrorCallback(CAN_HandleTypeDef *hcan)
+{
+    uint32_t er = HAL_CAN_GetError(hcan);
+    sprintf(trans_str,"ER CAN %lu %08lX", er, er);
+    HAL_UART_Transmit(&huart2, (uint8_t*)trans_str, strlen(trans_str), 100);
+}
+
 /* USER CODE END 0 */
 
 /**
@@ -277,6 +317,7 @@ int main(void)
   MX_TIM6_Init();
   MX_TIM3_Init();
   MX_SPI1_Init();
+  MX_CAN1_Init();
   /* USER CODE BEGIN 2 */
 	//HAL_ADC_Init(&hadc1);		//????
 	//Калибровка АЦП
@@ -302,11 +343,34 @@ int main(void)
 	HAL_GPIO_WritePin(SS_SPI1_GPIO_Port, SS_SPI1_Pin, GPIO_PIN_SET);
 	HAL_Delay(100);
 
+
+	//https://istarik.ru/blog/stm32/159.html
+	//Перед бесконечным циклом заполняем структуру отвечающую за отправку кадров…
+	TxHeader.StdId = 0x0378;
+	TxHeader.ExtId = 0;
+	TxHeader.RTR = CAN_RTR_DATA; //CAN_RTR_REMOTE
+	TxHeader.IDE = CAN_ID_STD;   // CAN_ID_EXT
+	TxHeader.DLC = 8;
+	TxHeader.TransmitGlobalTime = 0;
+
+	//Заполняем массив для отправки полезных данных каким-нибудь хламом
+	for(uint8_t i = 0; i < 8; i++)
+	{
+	    TxData[i] = (i + 10);
+	}
+
+	//Запускаем CAN
+	HAL_CAN_Start(&hcan1);
+	//�? активируем события которые будут вызывать прерывания
+	HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING | CAN_IT_ERROR | CAN_IT_BUSOFF | CAN_IT_LAST_ERROR_CODE);
+
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-	while (1) {
+	while (1)
+	{
 		if (HAL_GetTick() - T >= 500)
 		{
 			T = HAL_GetTick();
@@ -358,7 +422,7 @@ int main(void)
 			//Vbat = adc[2];
 			//mcuVoltage = ADC_MAX * ADC_REFERENCE_VOLTAGE / adc[3];
 
-			//HAL_Delay(5000);	//Или здесь. Величина влияет на "просечки", см. график на STM32CubeMonitor. Спасает от сваливания в void HardFault_Handler(void)!!!
+			//HAL_Delay(5000);	//�?ли здесь. Величина влияет на "просечки", см. график на STM32CubeMonitor. Спасает от сваливания в void HardFault_Handler(void)!!!
 
 			Temp_Sens = __LL_ADC_CALC_TEMPERATURE(VDDA_APPLI, adc[1],
 					LL_ADC_RESOLUTION_12B);
@@ -372,7 +436,7 @@ int main(void)
 			//printf("TS_CAL1 = %hu\n", (int32_t)*((uint16_t*) (0x1FFF75A8UL)));
 			//puts("TS_CAL2");
 			//printf("TS_CAL2 = %hu\n", (int32_t)*((uint16_t*) (0x1FFF75CAUL)));
-			//ПРОВЕРИЛ на калькулятореГ
+			//ПРОВЕР�?Л на калькулятореГ
 			//(130-30)/(1386-1045)*(940*3300/3000-1045)+30 = 26,77 град.С ВЕРНО!
 
 			//Vrefint_mV   = __LL_ADC_CALC_DATA_TO_VOLTAGE(VDDA_APPLI, adc[3], LL_ADC_RESOLUTION_12B);
@@ -475,9 +539,9 @@ int main(void)
 		HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, adc[0]);
 
 		TIM3->CCR1=adc[0]*16;
-		//[STM32Cube ADC+PWM Регулировка яркости светодиодов используя ШИМ,АЦП и stm32f4 discovery]
+		//[STM32Cube ADC+PWM Регулировка яркости светодиодов используя Ш�?М,АЦП и stm32f4 discovery]
 		//https://www.youtube.com/watch?v=RiZO9HGM-OY&t=3s
-
+//==================================================================================================
 		//HAL_SPI_Transmit (&hspi1, (uint8_t *) &adc[0], 1, 5000);
 
 
@@ -523,6 +587,51 @@ int main(void)
 		//printf("REC_SPI = %3s\n", REC_SPI);
 		//puts("adc[0]");
 		//printf("adc[0] = %d\n", adc[0]);
+//=======================================================================================
+		//CAN Bit Time Calculation
+		//http://www.bittiming.can-wiki.info/
+		//CAN-шина и stm32
+		//https://istarik.ru/blog/stm32/159.html
+		//STM32 и протокол CAN. Настройка в STM32CubeMx
+		//https://microtechnics.ru/stm32-i-protokol-can-nastrojka-v-stm32cubemx/
+		//�?спользование модулей CAN на STM32 для разных целей
+		//http://we.easyelectronics.ru/STM32/ispolzovanie-moduley-can-na-stm32-dlya-raznyh-celey.html
+		//Сообщества › Электронные Поделки › Блог › Урок 1 (3). Запускаем CAN-шину на STM32
+		//https://www.drive2.ru/c/472295770540736550/
+		//https://www.drive2.ru/c/536629295393539615
+		//STM32 CAN шина. Часть 1 (2). Настройка и странности HAL
+		//https://www.youtube.com/watch?v=bio8Qqel4zY&list=PLgRD4-fznAww5W1I_k7bmUTvK3BmH_KlH
+		//https://www.youtube.com/watch?v=xcIOLiilQ8U
+		//STM32 настройка CAN
+		//https://www.youtube.com/watch?v=JeDwEv51wFo
+
+		//Отправка сообщений в CAN-шину
+		//https://istarik.ru/blog/stm32/159.html
+
+		if(LED_State == 0)
+		{
+		TxHeader.StdId = 0x0378;
+		TxData[0] = 90;
+		}
+		else
+		{
+			TxHeader.StdId = 0x0126;
+			TxData[0] = 100;
+
+		}
+
+		//while(HAL_CAN_GetTxMailboxesFreeLevel(&hcan1) == 0);
+		if(HAL_CAN_GetTxMailboxesFreeLevel(&hcan1) != 0)
+		{
+
+		        if(HAL_CAN_AddTxMessage(&hcan1, &TxHeader, TxData, &TxMailbox) != HAL_OK)
+		        {
+		                HAL_UART_Transmit(&huart2, (uint8_t*)"ER SEND\n", 8, 100);
+		        }
+		}
+
+		        //HAL_Delay(500);
+
 
     /* USER CODE END WHILE */
 
@@ -539,8 +648,13 @@ void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
-  RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
 
+  /** Configure the main internal regulator output voltage
+  */
+  if (HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1) != HAL_OK)
+  {
+    Error_Handler();
+  }
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
@@ -568,26 +682,6 @@ void SystemClock_Config(void)
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
   if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_4) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USART2|RCC_PERIPHCLK_ADC;
-  PeriphClkInit.Usart2ClockSelection = RCC_USART2CLKSOURCE_PCLK1;
-  PeriphClkInit.AdcClockSelection = RCC_ADCCLKSOURCE_PLLSAI1;
-  PeriphClkInit.PLLSAI1.PLLSAI1Source = RCC_PLLSOURCE_HSI;
-  PeriphClkInit.PLLSAI1.PLLSAI1M = 1;
-  PeriphClkInit.PLLSAI1.PLLSAI1N = 8;
-  PeriphClkInit.PLLSAI1.PLLSAI1P = RCC_PLLP_DIV7;
-  PeriphClkInit.PLLSAI1.PLLSAI1Q = RCC_PLLQ_DIV2;
-  PeriphClkInit.PLLSAI1.PLLSAI1R = RCC_PLLR_DIV2;
-  PeriphClkInit.PLLSAI1.PLLSAI1ClockOut = RCC_PLLSAI1_ADC1CLK;
-  if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /** Configure the main internal regulator output voltage
-  */
-  if (HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1) != HAL_OK)
   {
     Error_Handler();
   }
@@ -671,6 +765,62 @@ static void MX_ADC1_Init(void)
   /* USER CODE BEGIN ADC1_Init 2 */
 
   /* USER CODE END ADC1_Init 2 */
+
+}
+
+/**
+  * @brief CAN1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_CAN1_Init(void)
+{
+
+  /* USER CODE BEGIN CAN1_Init 0 */
+	//Структура для конфигурации фильтров
+	//(Хотя бы один фильтр должен быть настроен иначе работать не будет)
+	//https://istarik.ru/blog/stm32/159.html
+	CAN_FilterTypeDef  sFilterConfig;
+  /* USER CODE END CAN1_Init 0 */
+
+  /* USER CODE BEGIN CAN1_Init 1 */
+
+  /* USER CODE END CAN1_Init 1 */
+  hcan1.Instance = CAN1;
+  hcan1.Init.Prescaler = 10;
+  hcan1.Init.Mode = CAN_MODE_SILENT_LOOPBACK;
+  hcan1.Init.SyncJumpWidth = CAN_SJW_1TQ;
+  hcan1.Init.TimeSeg1 = CAN_BS1_13TQ;
+  hcan1.Init.TimeSeg2 = CAN_BS2_2TQ;
+  hcan1.Init.TimeTriggeredMode = DISABLE;
+  hcan1.Init.AutoBusOff = ENABLE;
+  hcan1.Init.AutoWakeUp = DISABLE;
+  hcan1.Init.AutoRetransmission = DISABLE;
+  hcan1.Init.ReceiveFifoLocked = DISABLE;
+  hcan1.Init.TransmitFifoPriority = DISABLE;
+  if (HAL_CAN_Init(&hcan1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN CAN1_Init 2 */
+  //Настройка фильтра
+  //https://istarik.ru/blog/stm32/159.html
+  sFilterConfig.FilterBank = 0;
+  sFilterConfig.FilterMode = CAN_FILTERMODE_IDMASK;
+  sFilterConfig.FilterScale = CAN_FILTERSCALE_32BIT;
+  sFilterConfig.FilterIdHigh = 0x0000;
+  sFilterConfig.FilterIdLow = 0x0000;
+  sFilterConfig.FilterMaskIdHigh = 0x0000;
+  sFilterConfig.FilterMaskIdLow = 0x0000;
+  sFilterConfig.FilterFIFOAssignment = CAN_RX_FIFO0;
+  sFilterConfig.FilterActivation = ENABLE;
+  //sFilterConfig.SlaveStartFilterBank = 14;
+
+  if(HAL_CAN_ConfigFilter(&hcan1, &sFilterConfig) != HAL_OK)
+  {
+  Error_Handler();
+  }
+  /* USER CODE END CAN1_Init 2 */
 
 }
 
@@ -1003,4 +1153,3 @@ void assert_failed(uint8_t *file, uint32_t line)
 }
 #endif /* USE_FULL_ASSERT */
 
-/************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/
